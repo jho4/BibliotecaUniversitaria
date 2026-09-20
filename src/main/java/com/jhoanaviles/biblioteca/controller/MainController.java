@@ -133,4 +133,7 @@ public class MainController {
 
         return service.getPrestamos();
     }
+    public Libro buscarLibroPorCodigo(String codigo) {
+        return service.buscarLibroPorCodigo(codigo);
+    }
 }
