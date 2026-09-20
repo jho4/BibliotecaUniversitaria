@@ -11,6 +11,10 @@ public class ConfiguracionBiblioteca {
     private String nombreBiblioteca;
     private String direccion;
     private double porcentajeMulta;
+    /**
+     * se agrega nueva variable, para colocar valor de base diario
+     */
+    private double valorBaseMultaDia;
 
     /**
      * Constructor privado.
