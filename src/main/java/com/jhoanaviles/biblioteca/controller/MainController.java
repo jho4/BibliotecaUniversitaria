@@ -30,6 +30,7 @@ public class MainController {
     public void actualizarConfiguracion(
             String nombre,
             String direccion,
+            double valorBaseMultaDia,
             double porcentajeMulta) {
 
         ConfiguracionBiblioteca configuracion =
@@ -38,6 +39,8 @@ public class MainController {
         configuracion.setNombreBiblioteca(nombre);
         configuracion.setDireccion(direccion);
         configuracion.setPorcentajeMulta(porcentajeMulta);
+        configuracion.setValorBaseMultaDia(valorBaseMultaDia);
+
     }
 
     /**
@@ -58,6 +61,22 @@ public class MainController {
                         .build();
 
         service.registrarLibro(libro);
+    }
+
+    public void modificarLibro(
+            String codigoOriginal,
+            String nuevoCodigo,
+            String nuevoTitulo,
+            String nuevoAutor,
+            String nuevaCategoria) {
+
+        service.modificarLibro(
+                codigoOriginal,
+                nuevoCodigo,
+                nuevoTitulo,
+                nuevoAutor,
+                nuevaCategoria
+        );
     }
 
     /**
@@ -94,12 +113,14 @@ public class MainController {
     public double registrarDevolucion(
             String codigoPrestamo,
             LocalDate fechaReal,
-            double valorBaseDia) {
+            boolean usarPorcentajeEspecial,
+            double porcentajeEspecial) {
 
         return service.registrarDevolucion(
                 codigoPrestamo,
                 fechaReal,
-                valorBaseDia
+                usarPorcentajeEspecial,
+                porcentajeEspecial
         );
     }
 

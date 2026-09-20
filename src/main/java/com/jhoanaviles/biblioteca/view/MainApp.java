@@ -1,9 +1,10 @@
 package com.jhoanaviles.biblioteca.view;
 
 import com.jhoanaviles.biblioteca.controller.MainController;
-import com.jhoanaviles.biblioteca.singleton.ConfiguracionBiblioteca;
+import com.jhoanaviles.biblioteca.model.EstadoLibro;
 import com.jhoanaviles.biblioteca.model.Libro;
 import com.jhoanaviles.biblioteca.model.Prestamo;
+import com.jhoanaviles.biblioteca.singleton.ConfiguracionBiblioteca;
 
 import javafx.application.Application;
 import javafx.collections.FXCollections;
@@ -11,9 +12,11 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -25,18 +28,22 @@ import javafx.stage.Stage;
 import java.time.LocalDate;
 
 /**
- * Vista principal de la aplicación JavaFX.
+ * Vista principal de la aplicación.
  *
- * Contiene una interfaz gráfica sencilla
- * para demostrar las funcionalidades principales.
+ * Utiliza JavaFX y forma parte de la arquitectura MVC.
  */
 public class MainApp extends Application {
 
     private MainController controller;
 
-    private ListView<String> listaLibrosView;
-    private ListView<String> listaPrestamosView;
+    // Lista de registros realizados durante la sesión.
+    private ListView<String> listaRegistroView;
 
+    // Listas de libros separadas por estado.
+    private ListView<String> listaDisponiblesView;
+    private ListView<String> listaPrestadosView;
+
+    // Información de configuración.
     private Label lblInfoConfig;
 
     @Override
@@ -55,7 +62,15 @@ public class MainApp extends Application {
         );
 
         tabPane.getTabs().add(
-                crearTabLibros()
+                crearTabRegistro()
+        );
+
+        tabPane.getTabs().add(
+                crearTabListaLibros()
+        );
+
+        tabPane.getTabs().add(
+                crearTabModificacion()
         );
 
         tabPane.getTabs().add(
@@ -63,16 +78,38 @@ public class MainApp extends Application {
         );
 
         Scene scene =
-                new Scene(tabPane, 850, 550);
+                new Scene(tabPane, 950, 650);
 
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        actualizarListas();
+        actualizarTodasLasListas();
     }
 
     /**
-     * Pestaña de configuración.
+     * Crea un ScrollPane para una sección de la interfaz.
+     */
+    private ScrollPane crearScrollPane(VBox contenido) {
+
+        ScrollPane scrollPane =
+                new ScrollPane(contenido);
+
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(false);
+
+        scrollPane.setHbarPolicy(
+                ScrollPane.ScrollBarPolicy.AS_NEEDED
+        );
+
+        scrollPane.setVbarPolicy(
+                ScrollPane.ScrollBarPolicy.AS_NEEDED
+        );
+
+        return scrollPane;
+    }
+
+    /**
+     * Pestaña de configuración general.
      */
     private Tab crearTabConfiguracion() {
 
@@ -106,10 +143,17 @@ public class MainApp extends Application {
                         config.getDireccion()
                 );
 
-        TextField txtMulta =
+        TextField txtPorcentaje =
                 new TextField(
                         String.valueOf(
                                 config.getPorcentajeMulta()
+                        )
+                );
+
+        TextField txtValorBase =
+                new TextField(
+                        String.valueOf(
+                                config.getValorBaseMultaDia()
                         )
                 );
 
@@ -122,15 +166,33 @@ public class MainApp extends Application {
 
             try {
 
-                double multa =
+                double porcentaje =
                         Double.parseDouble(
-                                txtMulta.getText()
+                                txtPorcentaje.getText()
                         );
+
+                double valorBase =
+                        Double.parseDouble(
+                                txtValorBase.getText()
+                        );
+
+                if (porcentaje < 0) {
+                    throw new IllegalArgumentException(
+                            "El porcentaje no puede ser negativo."
+                    );
+                }
+
+                if (valorBase < 0) {
+                    throw new IllegalArgumentException(
+                            "El valor base no puede ser negativo."
+                    );
+                }
 
                 controller.actualizarConfiguracion(
                         txtNombre.getText(),
                         txtDireccion.getText(),
-                        multa
+                        valorBase,
+                        porcentaje
                 );
 
                 actualizarLabelConfig();
@@ -138,7 +200,15 @@ public class MainApp extends Application {
                 mostrarAlerta(
                         Alert.AlertType.INFORMATION,
                         "Configuración",
-                        "Configuración actualizada correctamente."
+                        "La configuración fue actualizada correctamente."
+                );
+
+            } catch (NumberFormatException e) {
+
+                mostrarAlerta(
+                        Alert.AlertType.ERROR,
+                        "Error",
+                        "El porcentaje y el valor base deben ser números."
                 );
 
             } catch (Exception e) {
@@ -151,6 +221,23 @@ public class MainApp extends Application {
             }
         });
 
+        Label lblFormula =
+                new Label(
+                        "Información sobre la multa\n\n"
+                                + "Fórmula:\n"
+                                + "Multa = días de retraso × valor base diario "
+                                + "× (porcentaje / 100)\n\n"
+                                + "El porcentaje general y el valor base diario "
+                                + "configurados se aplican normalmente a todos "
+                                + "los préstamos con devolución tardía.\n\n"
+                                + "Durante una devolución se puede activar un "
+                                + "porcentaje especial. En ese caso, dicho "
+                                + "porcentaje solo afecta esa devolución y no "
+                                + "modifica la configuración general."
+                );
+
+        lblFormula.setWrapText(true);
+
         layout.getChildren().addAll(
 
                 new Label(
@@ -159,30 +246,39 @@ public class MainApp extends Application {
 
                 lblInfoConfig,
 
-                new Label("Nombre:"),
+                new Label("Nombre de la biblioteca:"),
                 txtNombre,
 
                 new Label("Dirección:"),
                 txtDireccion,
 
-                new Label("Porcentaje de multa:"),
-                txtMulta,
+                new Label("Porcentaje de multa general (%):"),
+                txtPorcentaje,
 
-                btnGuardar
+                new Label("Valor base de multa por día:"),
+                txtValorBase,
+
+                btnGuardar,
+
+                new Separator(),
+
+                lblFormula
         );
 
-        tab.setContent(layout);
+        tab.setContent(
+                crearScrollPane(layout)
+        );
 
         return tab;
     }
 
     /**
-     * Pestaña de libros.
+     * Pestaña para registrar libros y utilizar Builder.
      */
-    private Tab crearTabLibros() {
+    private Tab crearTabRegistro() {
 
         Tab tab =
-                new Tab("Libros");
+                new Tab("Registro");
 
         tab.setClosable(false);
 
@@ -249,11 +345,11 @@ public class MainApp extends Application {
                         txtCategoria
                 );
 
-                actualizarListas();
+                actualizarTodasLasListas();
 
                 mostrarAlerta(
                         Alert.AlertType.INFORMATION,
-                        "Libro",
+                        "Registro",
                         "Libro registrado correctamente."
                 );
 
@@ -310,7 +406,7 @@ public class MainApp extends Application {
                 txtNuevoCodigo.clear();
                 txtNuevoTitulo.clear();
 
-                actualizarListas();
+                actualizarTodasLasListas();
 
                 mostrarAlerta(
                         Alert.AlertType.INFORMATION,
@@ -369,16 +465,16 @@ public class MainApp extends Application {
         VBox lista =
                 new VBox(8);
 
-        listaLibrosView =
+        listaRegistroView =
                 new ListView<>();
 
         lista.getChildren().addAll(
 
                 new Label(
-                        "Catálogo de libros"
+                        "Lista de registro por sesión"
                 ),
 
-                listaLibrosView
+                listaRegistroView
         );
 
         mainLayout.getChildren().addAll(
@@ -386,7 +482,225 @@ public class MainApp extends Application {
                 lista
         );
 
-        tab.setContent(mainLayout);
+        VBox contenido =
+                new VBox(mainLayout);
+
+        tab.setContent(
+                crearScrollPane(contenido)
+        );
+
+        return tab;
+    }
+
+    /**
+     * Pestaña que muestra los libros separados
+     * entre disponibles y prestados.
+     */
+    private Tab crearTabListaLibros() {
+
+        Tab tab =
+                new Tab("Lista Libros");
+
+        tab.setClosable(false);
+
+        VBox layout =
+                new VBox(12);
+
+        layout.setPadding(
+                new Insets(15)
+        );
+
+        Button btnActualizar =
+                new Button(
+                        "Actualizar lista"
+                );
+
+        btnActualizar.setOnAction(
+                event -> actualizarListaLibros()
+        );
+
+        listaDisponiblesView =
+                new ListView<>();
+
+        listaPrestadosView =
+                new ListView<>();
+
+        layout.getChildren().addAll(
+
+                new Label(
+                        "Lista de libros"
+                ),
+
+                btnActualizar,
+
+                new Label(
+                        "LIBROS DISPONIBLES"
+                ),
+
+                listaDisponiblesView,
+
+                new Separator(),
+
+                new Label(
+                        "LIBROS PRESTADOS"
+                ),
+
+                listaPrestadosView
+        );
+
+        tab.setContent(
+                crearScrollPane(layout)
+        );
+
+        return tab;
+    }
+
+    /**
+     * Pestaña para modificar datos de un libro.
+     *
+     * El estado no se modifica manualmente.
+     */
+    private Tab crearTabModificacion() {
+
+        Tab tab =
+                new Tab("Modificación");
+
+        tab.setClosable(false);
+
+        VBox layout =
+                new VBox(10);
+
+        layout.setPadding(
+                new Insets(15)
+        );
+
+        TextField txtCodigoActual =
+                new TextField();
+
+        txtCodigoActual.setPromptText(
+                "Código actual del libro"
+        );
+
+        TextField txtNuevoCodigo =
+                new TextField();
+
+        txtNuevoCodigo.setPromptText(
+                "Nuevo código"
+        );
+
+        TextField txtNuevoTitulo =
+                new TextField();
+
+        txtNuevoTitulo.setPromptText(
+                "Nuevo título"
+        );
+
+        TextField txtNuevoAutor =
+                new TextField();
+
+        txtNuevoAutor.setPromptText(
+                "Nuevo autor"
+        );
+
+        TextField txtNuevaCategoria =
+                new TextField();
+
+        txtNuevaCategoria.setPromptText(
+                "Nueva categoría"
+        );
+
+        Button btnModificar =
+                new Button(
+                        "Guardar cambios"
+                );
+
+        btnModificar.setOnAction(event -> {
+
+            try {
+
+                controller.modificarLibro(
+                        txtCodigoActual.getText(),
+                        txtNuevoCodigo.getText(),
+                        txtNuevoTitulo.getText(),
+                        txtNuevoAutor.getText(),
+                        txtNuevaCategoria.getText()
+                );
+
+                txtCodigoActual.clear();
+                txtNuevoCodigo.clear();
+                txtNuevoTitulo.clear();
+                txtNuevoAutor.clear();
+                txtNuevaCategoria.clear();
+
+                actualizarTodasLasListas();
+
+                mostrarAlerta(
+                        Alert.AlertType.INFORMATION,
+                        "Modificación",
+                        "Los datos del libro fueron actualizados."
+                );
+
+            } catch (Exception e) {
+
+                mostrarAlerta(
+                        Alert.AlertType.ERROR,
+                        "Error",
+                        e.getMessage()
+                );
+            }
+        });
+
+        Label lblAviso =
+                new Label(
+                        "Nota: el estado del libro no se modifica "
+                                + "manualmente. El sistema lo cambia "
+                                + "automáticamente mediante el préstamo "
+                                + "y la devolución."
+                );
+
+        lblAviso.setWrapText(true);
+
+        layout.getChildren().addAll(
+
+                new Label(
+                        "Modificar datos de un libro"
+                ),
+
+                new Label(
+                        "Código actual:"
+                ),
+                txtCodigoActual,
+
+                new Label(
+                        "Nuevo código:"
+                ),
+                txtNuevoCodigo,
+
+                new Label(
+                        "Nuevo título:"
+                ),
+                txtNuevoTitulo,
+
+                new Label(
+                        "Nuevo autor:"
+                ),
+                txtNuevoAutor,
+
+                new Label(
+                        "Nueva categoría:"
+                ),
+                txtNuevaCategoria,
+
+                btnModificar,
+
+                new Separator(),
+
+                lblAviso
+        );
+
+        tab.setContent(
+                crearScrollPane(layout)
+        );
 
         return tab;
     }
@@ -398,22 +712,21 @@ public class MainApp extends Application {
 
         Tab tab =
                 new Tab(
-                        "Préstamos y devoluciones"
+                        "Préstamos"
                 );
 
         tab.setClosable(false);
 
-        HBox mainLayout =
-                new HBox(15);
+        VBox layout =
+                new VBox(10);
 
-        mainLayout.setPadding(
+        layout.setPadding(
                 new Insets(15)
         );
 
-        VBox formulario =
-                new VBox(8);
-
-        formulario.setPrefWidth(350);
+        // --------------------------
+        // REALIZAR PRÉSTAMO
+        // --------------------------
 
         TextField txtCodigoLibro =
                 new TextField();
@@ -422,7 +735,7 @@ public class MainApp extends Application {
                 "Código del libro"
         );
 
-        DatePicker fechaDevolucion =
+        DatePicker fechaEstimada =
                 new DatePicker(
                         LocalDate.now().plusDays(3)
                 );
@@ -438,12 +751,12 @@ public class MainApp extends Application {
 
                 controller.realizarPrestamo(
                         txtCodigoLibro.getText(),
-                        fechaDevolucion.getValue()
+                        fechaEstimada.getValue()
                 );
 
                 txtCodigoLibro.clear();
 
-                actualizarListas();
+                actualizarTodasLasListas();
 
                 mostrarAlerta(
                         Alert.AlertType.INFORMATION,
@@ -461,6 +774,10 @@ public class MainApp extends Application {
             }
         });
 
+        // --------------------------
+        // DEVOLUCIÓN
+        // --------------------------
+
         Separator separator =
                 new Separator();
 
@@ -468,7 +785,7 @@ public class MainApp extends Application {
                 new TextField();
 
         txtCodigoPrestamo.setPromptText(
-                "Ejemplo: PRES-1"
+                "Número del préstamo"
         );
 
         DatePicker fechaReal =
@@ -476,11 +793,33 @@ public class MainApp extends Application {
                         LocalDate.now()
                 );
 
-        TextField txtValorBase =
+        CheckBox checkEspecial =
+                new CheckBox(
+                        "Aplicar porcentaje especial"
+                );
+
+        TextField txtPorcentajeEspecial =
                 new TextField();
 
-        txtValorBase.setPromptText(
-                "Valor base por día"
+        txtPorcentajeEspecial.setPromptText(
+                "Porcentaje especial (%)"
+        );
+
+        txtPorcentajeEspecial.setDisable(
+                true
+        );
+
+        checkEspecial.setOnAction(
+                event -> txtPorcentajeEspecial.setDisable(
+                        !checkEspecial.isSelected()
+                )
+        );
+
+        Label lblConfigMulta =
+                new Label();
+
+        actualizarInfoMulta(
+                lblConfigMulta
         );
 
         Button btnDevolver =
@@ -492,29 +831,47 @@ public class MainApp extends Application {
 
             try {
 
-                double valorBase =
-                        Double.parseDouble(
-                                txtValorBase.getText()
-                        );
+                boolean usarEspecial =
+                        checkEspecial.isSelected();
+
+                double porcentajeEspecial = 0.0;
+
+                if (usarEspecial) {
+
+                    porcentajeEspecial =
+                            Double.parseDouble(
+                                    txtPorcentajeEspecial.getText()
+                            );
+                }
 
                 double multa =
                         controller.registrarDevolucion(
                                 txtCodigoPrestamo.getText(),
                                 fechaReal.getValue(),
-                                valorBase
+                                usarEspecial,
+                                porcentajeEspecial
                         );
 
                 txtCodigoPrestamo.clear();
+                txtPorcentajeEspecial.clear();
 
-                actualizarListas();
+                checkEspecial.setSelected(false);
+                txtPorcentajeEspecial.setDisable(true);
+
+                actualizarTodasLasListas();
 
                 mostrarAlerta(
                         Alert.AlertType.INFORMATION,
                         "Devolución",
                         String.format(
-                                "Libro devuelto correctamente.%nMulta: $%.2f",
+                                "Libro devuelto correctamente.%n"
+                                        + "Multa calculada: $%.2f",
                                 multa
                         )
+                );
+
+                actualizarInfoMulta(
+                        lblConfigMulta
                 );
 
             } catch (Exception e) {
@@ -527,127 +884,190 @@ public class MainApp extends Application {
             }
         });
 
-        formulario.getChildren().addAll(
+        layout.getChildren().addAll(
 
                 new Label(
-                        "Realizar préstamo"
+                        "REALIZAR PRÉSTAMO"
                 ),
 
-                new Label("Código del libro:"),
+                new Label(
+                        "Código del libro:"
+                ),
                 txtCodigoLibro,
 
                 new Label(
                         "Fecha de devolución:"
                 ),
-                fechaDevolucion,
+                fechaEstimada,
 
                 btnPrestar,
 
                 separator,
 
                 new Label(
-                        "Registrar devolución"
+                        "REGISTRAR DEVOLUCIÓN"
                 ),
 
                 new Label(
-                        "Código del préstamo:"
+                        "Número del préstamo:"
                 ),
                 txtCodigoPrestamo,
 
                 new Label(
-                        "Fecha real:"
+                        "Fecha real de devolución:"
                 ),
                 fechaReal,
 
+                lblConfigMulta,
+
+                checkEspecial,
+
                 new Label(
-                        "Valor base por día:"
+                        "Porcentaje especial:"
                 ),
-                txtValorBase,
+                txtPorcentajeEspecial,
 
                 btnDevolver
         );
 
-        VBox lista =
-                new VBox(8);
-
-        listaPrestamosView =
-                new ListView<>();
-
-        lista.getChildren().addAll(
-
-                new Label(
-                        "Préstamos"
-                ),
-
-                listaPrestamosView
+        tab.setContent(
+                crearScrollPane(layout)
         );
-
-        mainLayout.getChildren().addAll(
-                formulario,
-                lista
-        );
-
-        tab.setContent(mainLayout);
 
         return tab;
     }
 
     /**
-     * Actualiza las listas mostradas en pantalla.
+     * Actualiza la información global de multa.
      */
-    private void actualizarListas() {
+    private void actualizarInfoMulta(
+            Label label) {
 
-        if (listaLibrosView != null) {
+        ConfiguracionBiblioteca config =
+                controller.getConfiguracion();
 
-            listaLibrosView.setItems(
-                    FXCollections.observableArrayList()
-            );
-
-            for (Libro libro :
-                    controller.obtenerLibros()) {
-
-                listaLibrosView.getItems().add(
-                        libro.toString()
-                );
-            }
-        }
-
-        if (listaPrestamosView != null) {
-
-            listaPrestamosView.setItems(
-                    FXCollections.observableArrayList()
-            );
-
-            for (Prestamo prestamo :
-                    controller.obtenerPrestamos()) {
-
-                listaPrestamosView.getItems().add(
-                        prestamo.toString()
-                );
-            }
-        }
+        label.setText(
+                "Configuración general actual:\n"
+                        + "Porcentaje: "
+                        + config.getPorcentajeMulta()
+                        + "%\n"
+                        + "Valor base diario: $"
+                        + String.format(
+                        "%.2f",
+                        config.getValorBaseMultaDia()
+                )
+        );
     }
 
     /**
-     * Actualiza el texto de la configuración.
+     * Actualiza el texto de configuración.
      */
     private void actualizarLabelConfig() {
+
+        if (lblInfoConfig == null) {
+            return;
+        }
 
         ConfiguracionBiblioteca config =
                 controller.getConfiguracion();
 
         lblInfoConfig.setText(
 
-                "Actual: "
+                "Configuración actual:\n"
+                        + "Biblioteca: "
                         + config.getNombreBiblioteca()
-                        + " | "
+                        + "\nDirección: "
                         + config.getDireccion()
-                        + " | Multa: "
+                        + "\nPorcentaje general: "
                         + config.getPorcentajeMulta()
                         + "%"
+                        + "\nValor base diario: $"
+                        + String.format(
+                        "%.2f",
+                        config.getValorBaseMultaDia()
+                )
         );
     }
 
+    /**
+     * Actualiza la lista de registros de la sesión.
+     */
+    private void actualizarListaRegistro() {
+
+        if (listaRegistroView == null) {
+            return;
+        }
+
+        listaRegistroView.setItems(
+                FXCollections.observableArrayList()
+        );
+
+        for (Libro libro :
+                controller.obtenerLibros()) {
+
+            listaRegistroView.getItems().add(
+                    libro.toString()
+            );
+        }
+    }
+
+    /**
+     * Actualiza la lista de libros disponibles
+     * y prestados.
+     */
+    private void actualizarListaLibros() {
+
+        javafx.collections.ObservableList<String> disponibles =
+                javafx.collections.FXCollections.observableArrayList();
+
+        javafx.collections.ObservableList<String> prestados =
+                javafx.collections.FXCollections.observableArrayList();
+
+        for (Libro libro : controller.obtenerLibros()) {
+
+            if (libro.getEstado() == EstadoLibro.DISPONIBLE) {
+
+                // Se conserva toda la información descriptiva del libro
+                disponibles.add(libro.toString());
+
+            } else {
+
+                for (Prestamo prestamo : controller.obtenerPrestamos()) {
+
+                    if (prestamo.getLibro() == libro
+                            && prestamo.getFechaDevolucionReal() == null) {
+
+                        // Se muestra el código del préstamo
+                        // junto con toda la información del libro
+                        prestados.add(
+                                "Código préstamo: ["
+                                        + prestamo.getCodigoPrestamo()
+                                        + "] | "
+                                        + libro.toString()
+                        );
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        listaDisponiblesView.setItems(disponibles);
+        listaPrestadosView.setItems(prestados);
+    }
+
+    /**
+     * Actualiza todas las listas de la interfaz.
+     */
+    private void actualizarTodasLasListas() {
+
+        actualizarListaRegistro();
+        actualizarListaLibros();
+    }
+
+    /**
+     * Limpia varios campos de texto.
+     */
     private void limpiarCampos(
             TextField... campos) {
 
@@ -657,7 +1077,7 @@ public class MainApp extends Application {
     }
 
     /**
-     * Muestra una ventana sencilla con un mensaje.
+     * Muestra un mensaje.
      */
     private void mostrarAlerta(
             Alert.AlertType tipo,

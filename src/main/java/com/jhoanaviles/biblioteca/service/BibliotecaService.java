@@ -16,10 +16,12 @@ public class BibliotecaService {
 
     private final List<Libro> libros = new ArrayList<>();
     private final List<Prestamo> prestamos = new ArrayList<>();
-
-    /**
+    /*se agrega un contador para identificar los prestamos más fácilmente
+    **/
+    private int siguienteCodigoPrestamo = 1;
+    /*
      * Registrar un nuevo libro.
-     */
+     **/
     public void registrarLibro(Libro libro) {
 
         if (libro == null) {
@@ -35,6 +37,44 @@ public class BibliotecaService {
         }
 
         libros.add(libro);
+    }
+
+    public void modificarLibro(
+            String codigoOriginal,
+            String nuevoCodigo,
+            String nuevoTitulo,
+            String nuevoAutor,
+            String nuevaCategoria) {
+        Libro libro = buscarLibroPorCodigo(codigoOriginal);
+
+        if (libro == null) {
+            throw new IllegalArgumentException(
+                    "El libro no existe."
+            );
+        }
+
+        if (nuevoCodigo == null ||
+                nuevoCodigo.trim().isEmpty()) {
+
+            throw new IllegalArgumentException(
+                    "El código es obligatorio."
+            );
+
+        }
+        Libro libroConNuevoCodigo =
+                buscarLibroPorCodigo(nuevoCodigo);
+
+        if (libroConNuevoCodigo != null &&
+                libroConNuevoCodigo != libro) {
+
+            throw new IllegalArgumentException(
+                    "Ya existe otro libro con ese código."
+            );
+        }
+        libro.setCodigo(nuevoCodigo.trim());
+        libro.setTitulo(nuevoTitulo.trim());
+        libro.setAutor(nuevoAutor);
+        libro.setCategoria(nuevaCategoria);
     }
 
     /**
@@ -118,9 +158,18 @@ public class BibliotecaService {
         }
 
         libro.setEstado(EstadoLibro.PRESTADO);
+/*
+*profe, la verdad, es identificador esta suave, más bien solo número y ya
+ **/
+/*        String codigoPrestamo =
+                "PRES-" + (prestamos.size() + 1);
+            se procede a tomar el valor del contador como String, y no se cambia a int, para no modificar más código
+**/
 
         String codigoPrestamo =
-                "PRES-" + (prestamos.size() + 1);
+                String.valueOf(siguienteCodigoPrestamo);
+
+        siguienteCodigoPrestamo++;
 
         Prestamo prestamo =
                 new Prestamo(
@@ -142,7 +191,12 @@ public class BibliotecaService {
     public double registrarDevolucion(
             String codigoPrestamo,
             LocalDate fechaReal,
-            double valorBaseDia) {
+            boolean usarPorcentajeEspecial,
+            /*no lo pienso eliminar, hasta probar
+            *double valorBaseDia
+             double valorBaseDia
+             * */
+            double porcentajeEspecial) {
 
         Prestamo prestamo =
                 buscarPrestamoPorCodigo(codigoPrestamo);
@@ -155,11 +209,25 @@ public class BibliotecaService {
 
         ConfiguracionBiblioteca configuracion =
                 ConfiguracionBiblioteca.getInstancia();
+        double porcentaje =
+                configuracion.getPorcentajeMulta();
 
+        if (usarPorcentajeEspecial) {
+
+            if (porcentajeEspecial <= porcentaje) {
+                throw new IllegalArgumentException(
+                        "El porcentaje especial debe ser mayor al porcentaje general."
+                );
+            }
+
+            porcentaje = porcentajeEspecial;
+        }
+
+        double valorBase = configuracion.getValorBaseMultaDia();
         return prestamo.registrarDevolucion(
                 fechaReal,
                 configuracion.getPorcentajeMulta(),
-                valorBaseDia
+                valorBase
         );
     }
 

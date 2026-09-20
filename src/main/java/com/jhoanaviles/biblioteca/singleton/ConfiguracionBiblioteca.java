@@ -27,6 +27,13 @@ public class ConfiguracionBiblioteca {
         nombreBiblioteca = "Biblioteca Universitaria";
         direccion = "Dirección no especificada";
         porcentajeMulta = 5.0;
+        /*
+        *Se agrega al constructor,
+        *valor para tener en cuenta
+        *base de multa diaria.
+        *ahora tanto el valor de 5 como 2000, es de ejemplo
+         **/
+        valorBaseMultaDia = 2000.0;
     }
 
     /**
@@ -63,5 +70,16 @@ public class ConfiguracionBiblioteca {
 
     public void setPorcentajeMulta(double porcentajeMulta) {
         this.porcentajeMulta = porcentajeMulta;
+    }
+
+    /*
+    * Se agrega para que el valor del base diaría de multa, sea persistente a todo el programa
+     **/
+    public double getValorBaseMultaDia() {
+        return valorBaseMultaDia;
+    }
+
+    public void setValorBaseMultaDia(double valorBaseMultaDia) {
+        this.valorBaseMultaDia = valorBaseMultaDia;
     }
 }
